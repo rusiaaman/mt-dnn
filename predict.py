@@ -42,7 +42,7 @@ def predict_config(parser):
 
 def get_model(directory,task):
     logger.info('Loading model')
-    model_path = os.path.join(directory,task,"model.pth")
+    model_path = os.path.join(directory,task,"model.pt")
 
     state_dict = None
 
@@ -68,7 +68,7 @@ class Predictor:
         self.cuda = cuda
 
         if self.cuda:
-            model.cuda()
+            self.model.cuda()
 
         self.batch_size = batch_size
 
@@ -162,26 +162,26 @@ class Predictor:
 
 
         input_data = Predictor.process_input_file(input_file,
-                                        self.opt.max_seq_len,
+                                        self.opt['max_seq_len'],
                                         self.task_name,
                                         evaluate)
 
         
-        pw_task = task_name in self.opt.pw_tasks 
+        pw_task = self.task_name in self.opt['pw_tasks'] 
 
         dataset = BatchGen(input_data,
                         batch_size=self.batch_size,
-                        dropout_w=self.opt.dropout_w,
+                        dropout_w=self.opt['dropout_w'],
                         gpu=self.cuda,
                         task_id=0,
-                        maxlen=self.opt.max_seq_len,
+                        maxlen=self.opt['max_seq_len'],
                         pairwise=pw_task,
-                        data_type=DATA_TYPE[task_name],
-                        task_type=TASK_TYPE[task_name],
+                        data_type=DATA_TYPE[self.task_name],
+                        task_type=TASK_TYPE[self.task_name],
                         is_train = False)
 
 
-        num_labels = DATA_META[task_name]
+        num_labels = DATA_META[self.task_name]
 
         
 
@@ -192,7 +192,7 @@ class Predictor:
         start = datetime.now()
         with torch.no_grad():
             metrics, predictions, scores, golds, ids =\
-                             eval_model(self.model, dataset, dataset=task_name,
+                             eval_model(self.model, dataset, dataset=self.task_name,
                                                 use_cuda=self.cuda,
                                                 with_label=evaluate)
 
@@ -213,11 +213,9 @@ if __name__=="__main__":
     args = parser.parse_args()
     pprint(args)
 
-    set_environment(args.seed, args.cuda)
-
     logger =  create_logger(__name__)
 
-    predictor = Predictor(args.checkpoint_dir,task,
+    predictor = Predictor(args.checkpoint_dir,args.task,
                     args.batch_size,args.cuda)
 
     predictor.predict_from_file(args.input_file,evaluate=args.evaluate)
