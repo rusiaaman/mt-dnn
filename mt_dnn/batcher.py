@@ -175,9 +175,9 @@ class BatchGen:
             batch_info['pairwise_size'] = self.pairwise_size
             batch_info['task_type'] = self.task_type
             if not self.is_train:
-                labels = [sample['label'] for sample in batch]
+                labels = [sample.get('label') for sample in batch]
                 batch_info['label'] = labels
                 if self.pairwise:
-                    batch_info['true_label'] = [sample['true_label'] for sample in batch]
+                    batch_info['true_label'] = [sample.get('true_label') for sample in batch]
             self.offset += 1
             yield batch_info, batch_data

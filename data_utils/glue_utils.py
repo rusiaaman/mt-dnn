@@ -1,7 +1,9 @@
 # Copyright (c) Microsoft. All rights reserved.
 import json
 import numpy as np
+from tqdm import tqdm
 from random import shuffle
+
 from .label_map import METRIC_FUNC, METRIC_META, METRIC_NAME
 
 def load_scitail(file, label_dict):
@@ -312,7 +314,7 @@ def eval_model(model, data, dataset, use_cuda=True, with_label=True):
     scores = []
     ids = []
     metrics = {}
-    for batch_meta, batch_data in data:
+    for batch_meta, batch_data in tqdm(data):
         score, pred, gold = model.predict(batch_meta, batch_data)
         predictions.extend(pred)
         golds.extend(gold)

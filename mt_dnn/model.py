@@ -172,7 +172,7 @@ class MTDNNModel(object):
                 predict[idx, pos] = 1
             predict = predict.reshape(-1).tolist()
             score = score.reshape(-1).tolist()
-            return score, predict, batch_meta['true_label']
+            return score, predict, batch_meta.get('true_label')
         else:
             if task_type < 1:
                 score = F.softmax(score, dim=1)
@@ -180,7 +180,7 @@ class MTDNNModel(object):
             score = score.numpy()
             predict = np.argmax(score, axis=1).tolist()
             score = score.reshape(-1).tolist()
-        return score, predict, batch_meta['label']
+        return score, predict, batch_meta.get('label')
 
     def save(self, filename):
         network_state = dict([(k, v.cpu()) for k, v in self.network.state_dict().items()])

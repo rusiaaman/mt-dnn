@@ -1,1 +1,1 @@
-python predict.py --input_file=predict/input.tsv --init_checkpoint=mt_dnn_models/mt_dnn_base.pt --batch_size=128 --output_file=predict/output.txt  --answer_opt=1 --optimizer=adamax --grad_clipping=0 --global_grad_clipping=1 --learning_rate=5e-5 --task=sst --evaluate
+python ../predict.py --input_file=predict/input.tsv --init_checkpoint=mt_dnn_models/mt_dnn_base.pt --batch_size=128 --output_file=predict/output.txt  --answer_opt=1 --optimizer=adamax --grad_clipping=0 --global_grad_clipping=1 --learning_rate=5e-5 --task=sst --evaluate
