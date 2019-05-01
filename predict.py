@@ -33,14 +33,14 @@ def data_config(parser):
 def predict_config(parser):
     parser.add_argument('--task', required=True, type=str)
     parser.add_argument('--evaluate', action="store_true")
-    parser.add_argument('--cuda', type=bool, default=torch.cuda.is_available(),
+    parser.add_argument('--cuda', action="store_true", default=torch.cuda.is_available(),
                         help='whether to use GPU acceleration.')
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--output_file', default='out.txt')
     return parser
 
 
-def get_model(directory,task):
+def get_model(directory,task,cuda):
     logger.info('Loading model')
     model_path = os.path.join(directory,task,"model.pt")
 
@@ -48,13 +48,18 @@ def get_model(directory,task):
 
     assert os.path.exists(model_path), f"Model folder doesn't exist: f{model_path}"
     
-    state_dict = torch.load(model_path)
+    if cuda:
+        state_dict = torch.load(model_path)
+    else:
+        state_dict = torch.load(model_path,map_location='cpu')
+    
     opt = state_dict['config']
-
-
+    
     model = MTDNNModel(opt, state_dict=state_dict)
+
     model.eval()
 
+    if cuda: model.cuda()
 
     return model,opt
 class Predictor:
@@ -62,13 +67,12 @@ class Predictor:
     def __init__(self,checkpoint_dir,task,batch_size,cuda=False):
 
         self.task_name = task
-
-        self.model,self.opt = get_model(checkpoint_dir,self.task_name)
-
         self.cuda = cuda
+        self.model,self.opt = get_model(checkpoint_dir,
+                                    self.task_name,
+                                    self.cuda)
 
-        if self.cuda:
-            self.model.cuda()
+
 
         self.batch_size = batch_size
 
