@@ -6,3 +6,4 @@ boto3==1.9.139
 pytorch-pretrained-bert==v0.6.0
 scikit-learn==0.20.3
 regex==2019.4.14
+pytest==4.4.1
