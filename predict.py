@@ -24,6 +24,7 @@ from pytorch_pretrained_bert.modeling import BertConfig
 
 from prepro import _truncate_seq_pair,bert_tokenizer
 
+logger =  create_logger(__name__)
 
 def data_config(parser):
     parser.add_argument("--checkpoint_dir", default='mt_dnn', type=str)
@@ -39,6 +40,65 @@ def predict_config(parser):
     parser.add_argument('--output_file', default='out.txt')
     return parser
 
+
+def get_featurizer_from_task(task_name):
+    """Given the task returns featurizer which takes
+    in a list of text, and an ID and returns the features. For example
+    given (["hello"],111) it returns {"uid":111,"token_id":[101,141,131,131],
+    "type_id":[0,0,1,1],"task":task_name}"""
+
+    if task_name in ["sst","cola"]:
+        """Sentence classification tasks"""
+        def get_features(vals,ID):
+            uid = str(ID)
+            assert (not evaluate and len(vals) == 1) or\
+                    (evaluate and len(vals) == 2), \
+                                (f"{task_name} should have single sentence "
+                                    " for prediction and a label if evaluation"
+                                f"sentence as input.")
+
+            sentence = vals[0]
+            premise = bert_tokenizer.tokenize(sentence)
+            if len(premise) >  max_seq_len - 3:
+                premise = premise[:max_seq_len - 3] 
+            input_ids = bert_tokenizer.convert_tokens_to_ids(
+                                            ['[CLS]'] + premise + ['[SEP]'])
+            type_ids = [0] * ( len(premise) + 2)
+            features = {'uid': uid, 'token_id': input_ids, 
+                                'type_id': type_ids, 'task': task_name}
+            if evaluate:
+                label = int(vals[-1])
+                features.update({"label": label})
+            return features
+        
+    elif task_name in ["qnli"]:
+        """For pairwise tasks"""
+        raise NotImplementedError("QNLI is not yet supported")
+        #TODO: check ruid and olabel to write down for qnli
+    else:
+        """Single premise and hypothesis case"""
+        def get_features(vals,ID):
+            uid = str(ID)
+            assert (not evaluate and len(vals) == 2) or\
+                    (evaluate and len(vals) == 3), \
+                                (f"{task_name} should have two"
+                                f"sentences as input and a label if evaluating"
+                                f" . ")
+
+            premise = bert_tokenizer.tokenize(vals[1])
+            hypothesis = bert_tokenizer.tokenize(vals[2])
+            _truncate_seq_pair(premise, hypothesis, max_seq_len - 3)
+            input_ids =bert_tokenizer.convert_tokens_to_ids(['[CLS]'] + hypothesis + ['[SEP]'] + premise + ['[SEP]'])
+            type_ids = [0] * ( len(hypothesis) + 2) + [1] * (len(premise) + 1)
+            features = {'uid': uid, 'token_id': input_ids, 
+                    'type_id': type_ids, 'task': task_name}
+            if evaluate:
+                label = int(vals[-1])
+                features.update({"label": label})
+
+            return features
+
+    return get_features
 
 def get_model(directory,task,cuda):
     logger.info('Loading model')
@@ -90,6 +150,26 @@ class Predictor:
         self.batch_size = batch_size
 
 
+    def predict(self,list_of_text_values):
+        """Returns predictions and confidences for list of list of text
+        list of text values change with respect to task, for e.g.,
+        it is a list of list of single text in case of sentence classification
+        tasks like sst. Do not pass labels"""
+
+        featurizer = get_featurizer_from_task(self.task_name)
+
+        all_features = []
+        
+        for i in range(len(list_of_text)):
+            try:
+                all_features.append(get_features(list_of_text_values,i))
+            except Exception as e:
+                raise Exception(f"{type(e)}: index: {i} error: {str(e)}")
+
+        return self._predict(all_features,evaluate=False)
+
+
+
     @staticmethod
     def process_input_file(input_file,max_seq_len,task_name,evaluate=False):
 
@@ -102,56 +182,8 @@ class Predictor:
                                     f". Allowed options:"
                                     f" {set(DATA_META).union(set(DATA_TYPE))}")
 
-        if task_name in ["sst","cola"]:
-            """Sentence classification tasks"""
-            def get_features(vals,i):
-                uid = str(i)
-                assert (not evaluate and len(vals) == 1) or\
-                        (evaluate and len(vals) == 2), \
-                                    (f"{task_name} should have single sentence "
-                                        " for prediction and a label if evaluation"
-                                    f"sentence as input. line number: {i}")
-
-                sentence = vals[0]
-                premise = bert_tokenizer.tokenize(sentence)
-                if len(premise) >  max_seq_len - 3:
-                    premise = premise[:max_seq_len - 3] 
-                input_ids = bert_tokenizer.convert_tokens_to_ids(
-                                                ['[CLS]'] + premise + ['[SEP]'])
-                type_ids = [0] * ( len(premise) + 2)
-                features = {'uid': uid, 'token_id': input_ids, 
-                                    'type_id': type_ids, 'task': task_name}
-                if evaluate:
-                    label = int(vals[-1])
-                    features.update({"label": label})
-                return features
-            
-        elif task_name in ["qnli"]:
-            """For pairwise tasks"""
-            raise NotImplementedError("QNLI is not yet supported")
-            #TODO: check ruid and olabel to write down for qnli
-        else:
-            """Single premise and hypothesis case"""
-            def get_features(vals,i):
-                uid = str(i)
-                assert (not evaluate and len(vals) == 2) or\
-                        (evaluate and len(vals) == 3), \
-                                    (f"{task_name} should have two"
-                                    f"sentences as input and a label if evaluating"
-                                    f" . line number: {i}")
-
-                premise = bert_tokenizer.tokenize(vals[1])
-                hypothesis = bert_tokenizer.tokenize(vals[2])
-                _truncate_seq_pair(premise, hypothesis, max_seq_len - 3)
-                input_ids =bert_tokenizer.convert_tokens_to_ids(['[CLS]'] + hypothesis + ['[SEP]'] + premise + ['[SEP]'])
-                type_ids = [0] * ( len(hypothesis) + 2) + [1] * (len(premise) + 1)
-                features = {'uid': uid, 'token_id': input_ids, 
-                        'type_id': type_ids, 'task': task_name}
-                if evaluate:
-                    label = int(vals[-1])
-                    features.update({"label": label})
-
-                return features
+        
+        get_features = get_featurizer_from_task(task_name)
 
         with open(input_file) as f:
             all_features = []
@@ -165,7 +197,10 @@ class Predictor:
                     raise ValueError("Invalid line in input_file: "
                         f"\n{line}\nline number: {i}")
 
-                all_features.append(get_features(vals,i))
+                try:
+                    all_features.append(get_features(vals,i))
+                except Exception as e:
+                    print(f"{type(e)}: line number: {i}: {str(e)}")
 
         return all_features
                 
@@ -183,7 +218,12 @@ class Predictor:
                                         self.task_name,
                                         evaluate)
 
-        
+        return self._predict(input_data,evaluate)
+    
+    def _predict(self,input_data,evaluate=False):
+        """Given input_data which are all the features,
+        return the predictions and metrices"""
+
         pw_task = self.task_name in self.opt['pw_tasks'] 
 
         dataset = BatchGen(input_data,
@@ -219,7 +259,16 @@ class Predictor:
         logger.info(metrics)
         logger.info(scores)
 
-        return metrics, predictions, scores, golds, ids
+        #Finding confidences of the predictions
+        scores_np = np.reshape(scores,shape=(-1,num_labels))
+        confidences = np.max(scores_np,axis=-1).tolist()
+        #Changing the predictions to the text labels
+        label_dict = GLOBAL_MAP.get(task_name, None)
+        if label_dict is not None:
+            assert type(predictions[0]) is int
+            predictions = [label_dict[p] for p in predictions]
+
+        return predictions, confidences, metrics, scores, golds, ids
 
     
 
@@ -230,8 +279,6 @@ if __name__=="__main__":
     parser = predict_config(parser)
     args = parser.parse_args()
     pprint(args)
-
-    logger =  create_logger(__name__)
 
     predictor = Predictor(args.checkpoint_dir,args.task,
                     args.batch_size,args.cuda)
