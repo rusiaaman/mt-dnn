@@ -43,23 +43,36 @@ def predict_config(parser):
 def get_model(directory,task,cuda):
     logger.info('Loading model')
     model_path = os.path.join(directory,task,"model.pt")
+    model_weights = os.path.join(directory,task,"model_weights.pt")
 
     state_dict = None
-
-    assert os.path.exists(model_path), f"Model folder doesn't exist: f{model_path}"
     
-    if cuda:
-        state_dict = torch.load(model_path)
+    if not os.path.exists(model_path):
+        if not os.path.exists(model_weights):
+            raise Exception("Please provide either "
+                    "model.pt (complete model)"
+                    "or model_weights.pt"
+                    " (obtained from fine tuning code)"
+                    f" at folder {directory}")
+        else:
+            if cuda:
+                state_dict = torch.load(model_weights)
+            else:
+                state_dict = torch.load(model_weights,map_location='cpu')
+            
+            logger.info("--state dict loaded")
+            opt = state_dict['config']
+            
+            model = MTDNNModel(opt, state_dict=state_dict)
     else:
-        state_dict = torch.load(model_path,map_location='cpu')
-    
-    opt = state_dict['config']
-    
-    model = MTDNNModel(opt, state_dict=state_dict)
+        model = torch.load(model_path)
+        opt = model.config
 
     model.eval()
 
     if cuda: model.cuda()
+
+    logger.info("Model loaded")
 
     return model,opt
 class Predictor:
@@ -204,6 +217,7 @@ class Predictor:
 
         logger.info(predictions)
         logger.info(metrics)
+        logger.info(scores)
 
         return metrics, predictions, scores, golds, ids
 

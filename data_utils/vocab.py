@@ -3,7 +3,6 @@ import re
 import warnings
 import tqdm
 import logging
-import spacy
 import unicodedata
 from collections import Counter
 from functools import partial
